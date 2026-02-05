@@ -19,14 +19,14 @@ public:
       m_trade.SetDeviationInPoints(m_deviation);
    }
 
-   bool Buy(const string symbol, const double lots, const double sl, const double tp)
+   bool Buy(const string symbol, const double lots, const double sl, const double tp, const string comment = "")
    {
-      return m_trade.Buy(lots, symbol, 0.0, sl, tp);
+      return m_trade.Buy(lots, symbol, 0.0, sl, tp, comment);
    }
 
-   bool Sell(const string symbol, const double lots, const double sl, const double tp)
+   bool Sell(const string symbol, const double lots, const double sl, const double tp, const string comment = "")
    {
-      return m_trade.Sell(lots, symbol, 0.0, sl, tp);
+      return m_trade.Sell(lots, symbol, 0.0, sl, tp, comment);
    }
 
    bool BuyStop(const string symbol, const double lots, const double price,
@@ -47,6 +47,12 @@ public:
    {
       if(ticket == 0) return false;
       return m_trade.PositionModify(ticket, sl, 0.0);
+   }
+
+   bool ModifySLTP(const ulong ticket, const double sl, const double tp)
+   {
+      if(ticket == 0) return false;
+      return m_trade.PositionModify(ticket, sl, tp);
    }
 
    bool ClosePosition(const ulong ticket)

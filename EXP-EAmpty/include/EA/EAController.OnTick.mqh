@@ -1,6 +1,7 @@
 void CEAController::OnTick()
 {
    ApplyTrailing();
+   ManageRunner();
 
    int dir = 0;
    datetime bar_time = 0;
@@ -41,36 +42,17 @@ void CEAController::OnTick()
 
    int tp_points = m_cfg.TPPoints;
    int sl_points = m_cfg.SLPoints;
-   bool use_stop_entry = false;
-   int offset_pts = m_cfg.EntryOffsetPoints;
-   if(offset_pts < 1) offset_pts = 1;
+   bool use_stop_entry = false; // forçar mercado
 
    if(m_cfg.StrategyPreset == 1) // PRESET_STOP_TP4_SL2
    {
       tp_points = 4;
       sl_points = 2;
-      use_stop_entry = true;
-   }
-
-   double stop_price = 0.0;
-   datetime expiration = 0;
-   if(use_stop_entry)
-   {
-      int ps = PeriodSeconds(m_tf);
-      if(ps <= 0) ps = PeriodSeconds(_Period);
-      expiration = bar_time + ps;
-
-      if(dir > 0)
-         stop_price = ask + offset_pts * point;
-      else
-         stop_price = bid - offset_pts * point;
-      stop_price = NormalizeDouble(stop_price, digits);
+      use_stop_entry = false; // mercado mesmo no preset
    }
 
    // calcula SL/TP sempre a partir do preço de entrada (mercado ou stop)
    double entry_price = (dir > 0 ? ask : bid);
-   if(use_stop_entry && stop_price > 0.0)
-      entry_price = stop_price;
 
    double sl = 0.0;
    double tp = 0.0;
@@ -88,43 +70,24 @@ void CEAController::OnTick()
       return;
    }
 
-   if(use_stop_entry && stop_price > 0.0)
-   {
-      if(dir > 0 && stop_price <= ask)
-         return;
-      if(dir < 0 && stop_price >= bid)
-         return;
-   }
-
    int ok_count = 0;
-   for(int i=0; i<m_cfg.NumOrders; i++)
+   if(dir > 0)
    {
-      bool ok = false;
-      if(dir > 0)
-      {
-         if(use_stop_entry && stop_price > 0.0)
-            ok = m_broker.BuyStop(_Symbol, lot, stop_price, sl, tp, expiration);
-         else
-            ok = m_broker.Buy(_Symbol, lot, sl, tp);
-      }
-      else if(dir < 0)
-      {
-         if(use_stop_entry && stop_price > 0.0)
-            ok = m_broker.SellStop(_Symbol, lot, stop_price, sl, tp, expiration);
-         else
-            ok = m_broker.Sell(_Symbol, lot, sl, tp);
-      }
-
-      if(ok)
-      {
-         ok_count++;
-         m_log.Info(StringFormat("Opened %s lot=%.2f", dir>0?"BUY":"SELL", lot));
-      }
-      else
-      {
-         m_log.Error(StringFormat("Order failed: %s", dir>0?"BUY":"SELL"));
-      }
+      if(m_broker.Buy(_Symbol, lot, sl, tp, "MAIN")) ok_count++;
+      if(m_cfg.RunnerEnabled && m_cfg.NumOrders >= 2)
+         if(m_broker.Buy(_Symbol, lot, sl, tp, "RUNNER")) ok_count++;
    }
+   else if(dir < 0)
+   {
+      if(m_broker.Sell(_Symbol, lot, sl, tp, "MAIN")) ok_count++;
+      if(m_cfg.RunnerEnabled && m_cfg.NumOrders >= 2)
+         if(m_broker.Sell(_Symbol, lot, sl, tp, "RUNNER")) ok_count++;
+   }
+
+   if(ok_count > 0)
+      m_log.Info(StringFormat("Opened %s x%d lot=%.2f", dir>0?"BUY":"SELL", ok_count, lot));
+   else
+      m_log.Error(StringFormat("Order failed: %s", dir>0?"BUY":"SELL"));
 
    if(ok_count > 0)
       m_last_signal_bar = bar_time; // registro do último sinal efetivado

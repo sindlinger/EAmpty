@@ -45,6 +45,7 @@ public:
 
 private:
    void UpdateSeqClose(const datetime bar_time);
+   void ManageRunner();
    void ClosePositionsByType(const long type);
    void ApplyTrailing();
    bool GetTrailLevel(const int shift, double &level);
@@ -54,6 +55,7 @@ private:
 #include "EAController.Init.mqh"
 #include "EAController.OnTick.mqh"
 #include "EAController.Exit.mqh"
+#include "EAController.Runner.mqh"
 #include "EAController.Trailing.mqh"
 #include "EAController.Status.mqh"
 

@@ -21,6 +21,12 @@ struct SConfig
    int SLMinPoints;
    int SLMaxPoints;
    int CloseSeqBars;
+   bool RunnerEnabled;
+   int RunnerBEPoints;
+   int RunnerLockPoints;
+   int RunnerTrailStartPoints;
+   int RunnerTrailDistancePoints;
+   bool RunnerRemoveTPOnBE;
 
    int LogLevel;
    bool PrintToJournal;

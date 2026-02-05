@@ -27,6 +27,12 @@ input int SLPoints = 5;
 input int SLMinPoints = 0;
 input int SLMaxPoints = 0;
 input int CloseSeqBars = 3;
+input bool RunnerEnabled = true;
+input int RunnerBEPoints = 0;
+input int RunnerLockPoints = 1;
+input int RunnerTrailStartPoints = 0;
+input int RunnerTrailDistancePoints = 5;
+input bool RunnerRemoveTPOnBE = true;
 
 input int LogLevel = 1; // 0=ERR,1=INFO,2=DEBUG
 input bool PrintToJournal = true;
@@ -50,6 +56,12 @@ int OnInit()
    cfg.SLMinPoints = SLMinPoints;
    cfg.SLMaxPoints = SLMaxPoints;
    cfg.CloseSeqBars = CloseSeqBars;
+   cfg.RunnerEnabled = RunnerEnabled;
+   cfg.RunnerBEPoints = RunnerBEPoints;
+   cfg.RunnerLockPoints = RunnerLockPoints;
+   cfg.RunnerTrailStartPoints = RunnerTrailStartPoints;
+   cfg.RunnerTrailDistancePoints = RunnerTrailDistancePoints;
+   cfg.RunnerRemoveTPOnBE = RunnerRemoveTPOnBE;
    cfg.LogLevel = LogLevel;
    cfg.PrintToJournal = PrintToJournal;
 
