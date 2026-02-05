@@ -70,18 +70,28 @@ void CEAController::OnTick()
       return;
    }
 
+   // runner com TP 1:1 baseado na distância do SL
+   double runner_tp = tp;
+   if(sl > 0.0)
+   {
+      double dist = MathAbs(entry_price - sl);
+      if(dist > 0.0)
+         runner_tp = (dir > 0 ? entry_price + dist : entry_price - dist);
+   }
+   if(runner_tp > 0.0) runner_tp = NormalizeDouble(runner_tp, digits);
+
    int ok_count = 0;
    if(dir > 0)
    {
       if(m_broker.Buy(_Symbol, lot, sl, tp, "MAIN")) ok_count++;
       if(m_cfg.RunnerEnabled && m_cfg.NumOrders >= 2)
-         if(m_broker.Buy(_Symbol, lot, sl, tp, "RUNNER")) ok_count++;
+         if(m_broker.Buy(_Symbol, lot, sl, runner_tp, "RUNNER")) ok_count++;
    }
    else if(dir < 0)
    {
       if(m_broker.Sell(_Symbol, lot, sl, tp, "MAIN")) ok_count++;
       if(m_cfg.RunnerEnabled && m_cfg.NumOrders >= 2)
-         if(m_broker.Sell(_Symbol, lot, sl, tp, "RUNNER")) ok_count++;
+         if(m_broker.Sell(_Symbol, lot, sl, runner_tp, "RUNNER")) ok_count++;
    }
 
    if(ok_count > 0)
