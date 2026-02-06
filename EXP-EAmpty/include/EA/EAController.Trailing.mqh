@@ -18,6 +18,8 @@ void CEAController::ApplyTrailing()
    for(int i=0; i<total; i++)
    {
       if(!m_pos.IsMine(i)) continue;
+      string cmt = PositionGetString(POSITION_COMMENT);
+      if(cmt == "RUNNER") continue; // runner usa trailing em pontos
       ulong ticket = (ulong)PositionGetInteger(POSITION_TICKET);
       long type = PositionGetInteger(POSITION_TYPE);
       double sl = PositionGetDouble(POSITION_SL);
