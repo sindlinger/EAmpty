@@ -35,6 +35,9 @@ private:
    datetime m_last_state_bar;
    int m_consec_buy3;
    int m_consec_sell3;
+   int m_live_dir;
+   datetime m_live_bar;
+   datetime m_live_start;
 
 public:
    CEAController();
@@ -48,6 +51,7 @@ private:
    void ManageRunner();
    void ClosePositionsByType(const long type);
    void ApplyTrailing();
+   void UpdateHedgeStops();
    bool GetTrailLevel(const int shift, double &level);
    void UpdateChartStatus();
 };
@@ -57,6 +61,7 @@ private:
 #include "EAController.Exit.mqh"
 #include "EAController.Runner.mqh"
 #include "EAController.Trailing.mqh"
+#include "EAController.Hedge.mqh"
 #include "EAController.Status.mqh"
 
 #endif

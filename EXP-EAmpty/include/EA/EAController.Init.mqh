@@ -12,6 +12,9 @@ CEAController::CEAController()
    m_last_state_bar = 0;
    m_consec_buy3 = 0;
    m_consec_sell3 = 0;
+   m_live_dir = 0;
+   m_live_bar = 0;
+   m_live_start = 0;
 }
 
 bool CEAController::Init(const SConfig &cfg)

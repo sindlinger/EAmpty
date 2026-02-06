@@ -33,6 +33,10 @@ input int RunnerLockPoints = 1;
 input int RunnerTrailStartPoints = 0;
 input int RunnerTrailDistancePoints = 5;
 input bool RunnerRemoveTPOnBE = true;
+input bool HedgeStopEnabled = false;
+input double HedgeExtraPips = 2.0;
+input double HedgeCoverPercent = 100.0;
+input int HedgeExpirationMinutes = 0;
 
 input int LogLevel = 1; // 0=ERR,1=INFO,2=DEBUG
 input bool PrintToJournal = true;
@@ -62,6 +66,10 @@ int OnInit()
    cfg.RunnerTrailStartPoints = RunnerTrailStartPoints;
    cfg.RunnerTrailDistancePoints = RunnerTrailDistancePoints;
    cfg.RunnerRemoveTPOnBE = RunnerRemoveTPOnBE;
+   cfg.HedgeStopEnabled = HedgeStopEnabled;
+   cfg.HedgeExtraPips = HedgeExtraPips;
+   cfg.HedgeCoverPercent = HedgeCoverPercent;
+   cfg.HedgeExpirationMinutes = HedgeExpirationMinutes;
    cfg.LogLevel = LogLevel;
    cfg.PrintToJournal = PrintToJournal;
 

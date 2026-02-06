@@ -28,6 +28,11 @@ struct SConfig
    int RunnerTrailDistancePoints;
    bool RunnerRemoveTPOnBE;
 
+   bool HedgeStopEnabled;
+   double HedgeExtraPips;
+   double HedgeCoverPercent;
+   int HedgeExpirationMinutes;
+
    int LogLevel;
    bool PrintToJournal;
 };

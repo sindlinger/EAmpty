@@ -33,14 +33,24 @@ public:
                 const double sl, const double tp,
                 const datetime expiration)
    {
-      return m_trade.BuyStop(lots, price, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiration);
+      if(expiration > 0)
+         return m_trade.BuyStop(lots, price, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiration);
+      return m_trade.BuyStop(lots, price, symbol, sl, tp, ORDER_TIME_GTC, 0);
    }
 
    bool SellStop(const string symbol, const double lots, const double price,
                  const double sl, const double tp,
                  const datetime expiration)
    {
-      return m_trade.SellStop(lots, price, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiration);
+      if(expiration > 0)
+         return m_trade.SellStop(lots, price, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiration);
+      return m_trade.SellStop(lots, price, symbol, sl, tp, ORDER_TIME_GTC, 0);
+   }
+
+   bool DeleteOrder(const ulong ticket)
+   {
+      if(ticket == 0) return false;
+      return m_trade.OrderDelete(ticket);
    }
 
    bool ModifySL(const ulong ticket, const double sl)

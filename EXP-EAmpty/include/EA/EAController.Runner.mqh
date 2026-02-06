@@ -6,6 +6,9 @@ void CEAController::ManageRunner()
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   double stop_level = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * point;
+   double freeze_level = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL) * point;
+   double min_dist = stop_level + freeze_level;
 
    int be_points = m_cfg.RunnerBEPoints;
    if(be_points <= 0) be_points = m_cfg.SLPoints;
@@ -37,11 +40,13 @@ void CEAController::ManageRunner()
          double be = open2;
          if(t2 == POSITION_TYPE_BUY)
          {
+            if((bid - be) < min_dist) continue;
             if(sl2 <= 0.0 || sl2 < be)
                m_broker.ModifySLTP((ulong)PositionGetInteger(POSITION_TICKET), NormalizeDouble(be, digits), PositionGetDouble(POSITION_TP));
          }
          else if(t2 == POSITION_TYPE_SELL)
          {
+            if((be - ask) < min_dist) continue;
             if(sl2 <= 0.0 || sl2 > be)
                m_broker.ModifySLTP((ulong)PositionGetInteger(POSITION_TICKET), NormalizeDouble(be, digits), PositionGetDouble(POSITION_TP));
          }
@@ -60,8 +65,19 @@ void CEAController::ManageRunner()
       }
 
       // valida lado correto
-      if(type == POSITION_TYPE_BUY && new_sl >= bid) new_sl = bid - point;
-      if(type == POSITION_TYPE_SELL && new_sl <= ask) new_sl = ask + point;
+      if(type == POSITION_TYPE_BUY)
+      {
+         double max_sl = bid - min_dist;
+         if(max_sl <= 0.0) continue;
+         if(new_sl > max_sl) new_sl = max_sl;
+         if(new_sl >= bid) new_sl = bid - point;
+      }
+      if(type == POSITION_TYPE_SELL)
+      {
+         double min_sl = ask + min_dist;
+         if(new_sl < min_sl) new_sl = min_sl;
+         if(new_sl <= ask) new_sl = ask + point;
+      }
 
       if(new_sl > 0.0)
       {

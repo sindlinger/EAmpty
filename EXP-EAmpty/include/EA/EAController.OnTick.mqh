@@ -2,6 +2,7 @@ void CEAController::OnTick()
 {
    ApplyTrailing();
    ManageRunner();
+   UpdateHedgeStops();
 
    int dir = 0;
    datetime bar_time = 0;
@@ -12,8 +13,29 @@ void CEAController::OnTick()
 
    if(dir == 0)
    {
+      m_live_dir = 0;
+      m_live_bar = 0;
+      m_live_start = 0;
       UpdateChartStatus();
       return;
+   }
+
+   // entrada intrabarra: sinal precisa permanecer >= metade do candle
+   int bar_sec = PeriodSeconds(m_tf);
+   if(bar_sec > 0)
+   {
+      if(m_live_bar != bar_time || m_live_dir != dir)
+      {
+         m_live_bar = bar_time;
+         m_live_dir = dir;
+         m_live_start = TimeCurrent();
+      }
+      int elapsed = (int)(TimeCurrent() - m_live_start);
+      if(elapsed < (bar_sec / 2))
+      {
+         UpdateChartStatus();
+         return;
+      }
    }
 
    if(dir != 0)
