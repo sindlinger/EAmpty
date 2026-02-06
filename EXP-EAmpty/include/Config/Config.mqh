@@ -34,6 +34,8 @@ struct SConfig
    int HedgeExpirationMinutes;
    bool AttachPhaseClock;
    int PhaseClockWindow;
+   bool AttachPriceZigZag;
+   int PriceZigZagWindow;
 
    int LogLevel;
    bool PrintToJournal;

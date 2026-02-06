@@ -140,12 +140,6 @@ input bool         ShowZigZagStats  = true;
 input int          ZZTextXOffset    = 110;
 input int          ZZTextYOffset    = 80;
 
-// ZigZag color no preço
-input bool         ShowPriceZigZag  = true;
-input int          PriceZZWidth     = 2;
-input color        PriceZZUpColor   = clrDodgerBlue;
-input color        PriceZZDownColor = clrRed;
-input int          PriceZZMaxSegments = 120;
 
 // ---------------- buffers ----------------
 double gOut[];
@@ -163,7 +157,6 @@ double   gMask[];
 double   gLastPhase = 0.0;
 bool     gMaskOk = true;
 bool     gWarnedBand = false;
-int      gPriceZZCount = 0;
 
 // Subwindow onde o indicador está
 int      gSubWin = -1;
@@ -542,7 +535,6 @@ string ClockHandSegName(const int idx){ return gObjPrefix + StringFormat("HAND_%
 string ClockCenterName(){ return gObjPrefix + "CENTER"; }
 string ClockTextName(){ return gObjPrefix + "TEXT"; }
 string ZZTextName(const int idx){ return gObjPrefix + StringFormat("ZZTEXT_%d", idx); }
-string PriceZZName(const int idx){ return gObjPrefix + StringFormat("PZZ_%d", idx); }
 
 void EnsureSubWin()
 {
@@ -583,16 +575,6 @@ void DeleteZZText()
    for(int i=0;i<8;i++) ObjectDelete(0, ZZTextName(i));
 }
 
-void DeletePriceZZ()
-{
-   int total = ObjectsTotal(0, 0, -1);
-   for(int i=total-1; i>=0; i--)
-   {
-      string name = ObjectName(0, i, 0, -1);
-      if(StringFind(name, gObjPrefix + "PZZ_") == 0)
-         ObjectDelete(0, name);
-   }
-}
 
 void UpdatePhaseClock(const double phase)
 {
@@ -703,49 +685,6 @@ void UpdatePhaseClock(const double phase)
 }
 
 // ---------------- ZigZag helpers ----------------
-void DrawPriceZigZag(const int pivots, const int &pidx[], const int &pdir[], const datetime &time[], const double &high[], const double &low[])
-{
-   if(!ShowPriceZigZag) { DeletePriceZZ(); gPriceZZCount = 0; return; }
-   if(pivots < 2) return;
-
-   int start = 0;
-   int total_segs = pivots - 1;
-   if(PriceZZMaxSegments > 0 && total_segs > PriceZZMaxSegments)
-      start = total_segs - PriceZZMaxSegments;
-
-   int seg = 0;
-   for(int k=start; k<pivots-1; k++)
-   {
-      int i1 = pidx[k];
-      int i2 = pidx[k+1];
-      if(i1 < 0 || i2 < 0) continue;
-      if(i1 == i2) continue;
-
-      double p1 = (pdir[k] > 0 ? high[i1] : low[i1]);
-      double p2 = (pdir[k+1] > 0 ? high[i2] : low[i2]);
-      color col = (p2 >= p1 ? PriceZZUpColor : PriceZZDownColor);
-
-      string name = PriceZZName(seg++);
-      if(ObjectFind(0, name) < 0)
-         ObjectCreate(0, name, OBJ_TREND, 0, time[i1], p1, time[i2], p2);
-      else
-      {
-         ObjectMove(0, name, 0, time[i1], p1);
-         ObjectMove(0, name, 1, time[i2], p2);
-      }
-      ObjectSetInteger(0, name, OBJPROP_COLOR, col);
-      ObjectSetInteger(0, name, OBJPROP_WIDTH, PriceZZWidth);
-      ObjectSetInteger(0, name, OBJPROP_RAY, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-   }
-
-   // remove segmentos antigos não usados
-   for(int i=seg; i<gPriceZZCount; i++)
-      ObjectDelete(0, PriceZZName(i));
-   gPriceZZCount = seg;
-}
-
 void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
 {
    if(!ShowZigZagStats){ DeleteZZText(); return; }
@@ -952,7 +891,6 @@ void OnDeinit(const int reason)
       IndicatorRelease(gAtrHandle2);
    DeleteClockObjects();
    DeleteZZText();
-   DeletePriceZZ();
 }
 
 int OnCalculate(const int rates_total,
@@ -1057,7 +995,6 @@ int OnCalculate(const int rates_total,
       BuildWaveZigZag(rates_total, gOut, zz_pivots, zz_idx, zz_dir);
       FillWaveZigZag(zz_pivots, zz_idx, zz_dir, gOut);
       UpdateZZStats(zz_pivots, zz_idx, zz_dir);
-      DrawPriceZigZag(zz_pivots, zz_idx, zz_dir, time, high, low);
    }
 
    s_prev_out = gOut[0];
