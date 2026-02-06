@@ -56,12 +56,64 @@ public:
    bool ModifySL(const ulong ticket, const double sl)
    {
       if(ticket == 0) return false;
+      if(!PositionSelectByTicket(ticket)) return false;
+
+      double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+      double cur_sl = PositionGetDouble(POSITION_SL);
+      if(cur_sl > 0.0 && MathAbs(sl - cur_sl) < point) return true;
+
+      long type = PositionGetInteger(POSITION_TYPE);
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double min_dist = (SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) +
+                         SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL)) * point;
+
+      if(sl > 0.0)
+      {
+         if(type == POSITION_TYPE_BUY)
+         {
+            if(sl >= bid) return true;
+            if((bid - sl) < min_dist) return true;
+         }
+         else if(type == POSITION_TYPE_SELL)
+         {
+            if(sl <= ask) return true;
+            if((sl - ask) < min_dist) return true;
+         }
+      }
+
       return m_trade.PositionModify(ticket, sl, 0.0);
    }
 
    bool ModifySLTP(const ulong ticket, const double sl, const double tp)
    {
       if(ticket == 0) return false;
+      if(!PositionSelectByTicket(ticket)) return false;
+
+      double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+      double cur_sl = PositionGetDouble(POSITION_SL);
+      if(cur_sl > 0.0 && MathAbs(sl - cur_sl) < point) return true;
+
+      long type = PositionGetInteger(POSITION_TYPE);
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double min_dist = (SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) +
+                         SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL)) * point;
+
+      if(sl > 0.0)
+      {
+         if(type == POSITION_TYPE_BUY)
+         {
+            if(sl >= bid) return true;
+            if((bid - sl) < min_dist) return true;
+         }
+         else if(type == POSITION_TYPE_SELL)
+         {
+            if(sl <= ask) return true;
+            if((sl - ask) < min_dist) return true;
+         }
+      }
+
       return m_trade.PositionModify(ticket, sl, tp);
    }
 
