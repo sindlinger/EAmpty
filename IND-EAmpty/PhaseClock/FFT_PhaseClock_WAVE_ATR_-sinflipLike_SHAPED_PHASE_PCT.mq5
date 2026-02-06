@@ -139,8 +139,6 @@ input int          ZZMidAvgCount    = 10;   // swings para média média
 input bool         ShowZigZagStats  = true;
 input int          ZZTextXOffset    = 110;
 input int          ZZTextYOffset    = 80;
-input int          ZZBoxWidth       = 120;
-input int          ZZBoxHeight      = 60;
 
 // ZigZag color no preço
 input bool         ShowPriceZigZag  = true;
@@ -148,15 +146,6 @@ input int          PriceZZWidth     = 2;
 input color        PriceZZUpColor   = clrDodgerBlue;
 input color        PriceZZDownColor = clrRed;
 input int          PriceZZMaxSegments = 120;
-input bool         ShowPriceZZStats = true;
-input int          PriceZZTextXOffset = 20;
-input int          PriceZZTextYOffset = 20;
-input int          PriceZZBoxWidth    = 120;
-input int          PriceZZBoxHeight   = 60;
-
-input int          StatsBoxAlpha    = 160; // 0..255
-input color        StatsBoxBgColor  = clrBlack;
-input color        StatsBoxBorderColor = clrDimGray;
 
 // ---------------- buffers ----------------
 double gOut[];
@@ -449,52 +438,6 @@ bool FetchSourceSeries(const int total, const double &open[], const double &high
    return true;
 }
 
-bool FetchSourceSeriesShift(const int total, const double &open[], const double &high[], const double &low[], const double &close[],
-                            const long &tick_volume[], const long &volume_arr[],
-                            const int shift,
-                            double &src_series[], const int needN, const int atr_handle)
-{
-   ArrayResize(src_series, needN);
-   ArraySetAsSeries(src_series, true);
-
-   if(FeedSource == FEED_ATR)
-   {
-      int handle = atr_handle;
-      if(handle == INVALID_HANDLE) return false;
-      int got = CopyBuffer(handle, 0, shift, needN, src_series);
-      return (got > 0);
-   }
-
-   for(int i=0; i<needN; i++)
-   {
-      int idx = i + shift;
-      double v = 0.0;
-      switch(FeedSource)
-      {
-         case FEED_TR: v = TrueRangeAtShift(high, low, close, idx, total); break;
-         case FEED_CLOSE: v = (idx < total) ? close[idx] : close[total-1]; break;
-         case FEED_HL2: v = ((idx < total) ? (high[idx]+low[idx]) : (high[total-1]+low[total-1]))*0.5; break;
-         case FEED_HLC3:
-            v = (idx < total) ? (high[idx]+low[idx]+close[idx])/3.0 : (high[total-1]+low[total-1]+close[total-1])/3.0;
-            break;
-         case FEED_OHLC4:
-            v = (idx < total) ? (open[idx]+high[idx]+low[idx]+close[idx])/4.0 : (open[total-1]+high[total-1]+low[total-1]+close[total-1])/4.0;
-            break;
-         case FEED_VOLUME:
-            v = (double)((idx < total) ? volume_arr[idx] : volume_arr[total-1]);
-            break;
-         case FEED_TICKVOLUME:
-            v = (double)((idx < total) ? tick_volume[idx] : tick_volume[total-1]);
-            break;
-         default:
-            v = (idx < total) ? close[idx] : close[total-1];
-            break;
-      }
-      src_series[i] = v;
-   }
-   return true;
-}
-
 bool ComputeBar0Phase(const int total,
                       const double &open[], const double &high[], const double &low[], const double &close[],
                       const long &tick_volume[], const long &volume_arr[],
@@ -590,93 +533,6 @@ bool ComputeBar0Phase(const int total,
    return true;
 }
 
-bool ComputePhaseAtShift(const int total,
-                         const double &open[], const double &high[], const double &low[], const double &close[],
-                         const long &tick_volume[], const long &volume_arr[],
-                         const int shift,
-                         const int atr_handle,
-                         double &out_value, double &out_phase)
-{
-   int N = gN;
-   if(N <= 32) return false;
-
-   double src_series[];
-   if(!FetchSourceSeriesShift(total, open, high, low, close, tick_volume, volume_arr, shift, src_series, N, atr_handle))
-      return false;
-
-   double re[], im[];
-   ArrayResize(re, N);
-   ArrayResize(im, N);
-
-   double mean = 0.0;
-   for(int n=0; n<N; n++)
-   {
-      int sidx = (N-1 - n);
-      double x = GetSeriesSample(src_series, sidx, N);
-      re[n] = x; im[n] = 0.0;
-      mean += x;
-   }
-   mean = (N>0 ? mean/(double)N : 0.0);
-
-   for(int n=0; n<N; n++)
-   {
-      double x = re[n];
-      if(RemoveDC) x -= mean;
-      x *= gWin[n];
-      re[n] = x;
-      im[n] = 0.0;
-   }
-
-   FFT(re, im, false);
-   for(int k=0; k<N; k++)
-   {
-      double m = gMask[k];
-      re[k] *= m;
-      im[k] *= m;
-   }
-   FFT(re, im, true);
-
-   double are = re[N-1];
-   double aim = im[N-1];
-   if(!MathIsValidNumber(are)) are = 0.0;
-   if(!MathIsValidNumber(aim)) aim = 0.0;
-
-   double phase = MathArctan2(aim, are);
-   double amp   = MathSqrt(are*are + aim*aim);
-
-   if(HoldPhaseOnLowAmp && amp < LowAmpEps)
-      phase = gLastPhase;
-
-   gLastPhase = phase;
-   out_phase = phase;
-
-   double s = MathSin(phase);
-   double c = MathCos(phase);
-
-   if(OutputMode == OUT_PHASE_RAD)
-      out_value = phase;
-   else if(OutputMode == OUT_PHASE_DEG)
-      out_value = phase * 180.0 / M_PI;
-   else
-   {
-      double base = (OutputMode == OUT_COS ? c : s);
-      double shaped = base;
-
-      if(WaveShape == SHAPE_TRIANGLE_MIX)
-      {
-         double mix = TriangleMix;
-         if(mix < 0.0) mix = 0.0;
-         if(mix > 1.0) mix = 1.0;
-
-         double tri = (2.0/M_PI) * MathArcsin(base);
-         shaped = (1.0 - mix) * base + mix * tri;
-      }
-
-      out_value = shaped;
-   }
-   return true;
-}
-
 // ---------------- CLOCK (arrumado) ----------------
 string gObjPrefix = INDICATOR_NAME + "_";
 
@@ -686,9 +542,6 @@ string ClockHandSegName(const int idx){ return gObjPrefix + StringFormat("HAND_%
 string ClockCenterName(){ return gObjPrefix + "CENTER"; }
 string ClockTextName(){ return gObjPrefix + "TEXT"; }
 string ZZTextName(const int idx){ return gObjPrefix + StringFormat("ZZTEXT_%d", idx); }
-string ZZBoxName(){ return gObjPrefix + "ZZBOX"; }
-string PriceZZTextName(const int idx){ return gObjPrefix + StringFormat("PZTXT_%d", idx); }
-string PriceZZBoxName(){ return gObjPrefix + "PZBOX"; }
 string PriceZZName(const int idx){ return gObjPrefix + StringFormat("PZZ_%d", idx); }
 
 void EnsureSubWin()
@@ -716,41 +569,6 @@ void SetLabel(const string name, const int xdist, const int ydist, const color c
    ObjectSetString (0, name, OBJPROP_TEXT, text);
 }
 
-void SetLabelWin(const string name, const int win, const int xdist, const int ydist, const color col, const int fsz, const string text)
-{
-   if(ObjectFind(0, name) < 0)
-      ObjectCreate(0, name, OBJ_LABEL, win, 0, 0);
-
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, ydist);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, col);
-   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fsz);
-   ObjectSetString (0, name, OBJPROP_FONT, "Arial");
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-   ObjectSetString (0, name, OBJPROP_TEXT, text);
-}
-
-void SetBoxWin(const string name, const int win, const int xdist, const int ydist, const int w, const int h, const color bg, const color border)
-{
-   if(ObjectFind(0, name) < 0)
-      ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, win, 0, 0);
-
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, ydist);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, border);
-   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
-   ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-   ObjectSetInteger(0, name, OBJPROP_BACK, true);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-}
-
 void DeleteClockObjects()
 {
    for(int i=0;i<12;i++) ObjectDelete(0, ClockNumName(i));
@@ -763,13 +581,6 @@ void DeleteClockObjects()
 void DeleteZZText()
 {
    for(int i=0;i<8;i++) ObjectDelete(0, ZZTextName(i));
-   ObjectDelete(0, ZZBoxName());
-}
-
-void DeletePriceZZText()
-{
-   for(int i=0;i<8;i++) ObjectDelete(0, PriceZZTextName(i));
-   ObjectDelete(0, PriceZZBoxName());
 }
 
 void DeletePriceZZ()
@@ -937,7 +748,7 @@ void DrawPriceZigZag(const int pivots, const int &pidx[], const int &pdir[], con
 
 void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
 {
-   if(!ShowZigZagStats){ DeleteZZText(); DeletePriceZZText(); return; }
+   if(!ShowZigZagStats){ DeleteZZText(); return; }
    EnsureSubWin();
 
    int last = pivots - 1;
@@ -970,12 +781,6 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    double avg_up   = (count_up > 0 ? sum_up / count_up : 0.0);
    double avg_dn   = (count_dn > 0 ? sum_dn / count_dn : 0.0);
 
-   // barras por ciclo (aprox) = 2 * swing médio
-   double curr_cycle = (double)curr_len * 2.0;
-   double prev_cycle = (double)prev_len * 2.0;
-   double long_cycle = avg_long * 2.0;
-   double mid_cycle  = avg_mid * 2.0;
-
    double next_top = -1.0;
    double next_bot = -1.0;
    if(last >= 0)
@@ -993,30 +798,15 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    }
 
    int y = ZZTextYOffset;
-   string l1 = StringFormat("A:%.0f  P:%.0f", curr_cycle, prev_cycle);
-   string l2 = StringFormat("L:%.0f  M:%.0f", long_cycle, mid_cycle);
-   string l3 = (next_top >= 0 ? StringFormat("U %.0f", next_top) : "U -");
-   string l4 = (next_bot >= 0 ? StringFormat("D %.0f", next_bot) : "D -");
+   string l1 = StringFormat("C:%d  P:%d", curr_len, prev_len);
+   string l2 = StringFormat("L:%.1f  M:%.1f", avg_long, avg_mid);
+   string l3 = (next_top >= 0 ? StringFormat("TOP %.0f", next_top) : "TOP -");
+   string l4 = (next_bot >= 0 ? StringFormat("BOT %.0f", next_bot) : "BOT -");
 
-   color bg = (color)ColorToARGB(StatsBoxBgColor, (uchar)StatsBoxAlpha);
-   SetBoxWin(ZZBoxName(), gSubWin, ZZTextXOffset - 6, ZZTextYOffset - 6, ZZBoxWidth, ZZBoxHeight, bg, StatsBoxBorderColor);
    SetLabel(ZZTextName(0), ZZTextXOffset, y, clrWhite, 10, l1);
    SetLabel(ZZTextName(1), ZZTextXOffset, y + 14, clrSilver, 10, l2);
    SetLabel(ZZTextName(2), ZZTextXOffset, y + 28, clrDodgerBlue, 10, l3);
    SetLabel(ZZTextName(3), ZZTextXOffset, y + 42, clrRed, 10, l4);
-
-   if(ShowPriceZZStats)
-   {
-      SetBoxWin(PriceZZBoxName(), 0, PriceZZTextXOffset - 6, PriceZZTextYOffset - 6, PriceZZBoxWidth, PriceZZBoxHeight, bg, StatsBoxBorderColor);
-      SetLabelWin(PriceZZTextName(0), 0, PriceZZTextXOffset, PriceZZTextYOffset, clrWhite, 10, l1);
-      SetLabelWin(PriceZZTextName(1), 0, PriceZZTextXOffset, PriceZZTextYOffset + 14, clrSilver, 10, l2);
-      SetLabelWin(PriceZZTextName(2), 0, PriceZZTextXOffset, PriceZZTextYOffset + 28, clrDodgerBlue, 10, l3);
-      SetLabelWin(PriceZZTextName(3), 0, PriceZZTextXOffset, PriceZZTextYOffset + 42, clrRed, 10, l4);
-   }
-   else
-   {
-      DeletePriceZZText();
-   }
 }
 
 int BuildWaveZigZag(const int rates_total, const double &wave[], int &pivots, int &pidx[], int &pdir[])
@@ -1256,38 +1046,11 @@ int OnCalculate(const int rates_total,
    else
       gOut2[0] = 0.0;
 
-   // ZigZag/contagens: backfill no início + atualiza em nova barra
+   // ZigZag/contagens: atualiza apenas em nova barra
    static datetime last_zz_time = 0;
-   bool need_zz = false;
-
-   if(prev_calculated == 0 && rates_total > 1)
-   {
-      int maxfill = rates_total - 1;
-      if(ZZLookback > 0 && maxfill > ZZLookback) maxfill = ZZLookback;
-      for(int i=maxfill; i>=0; i--)
-      {
-         double ov=0.0, phv=0.0;
-         double ov2=0.0, phv2=0.0;
-         bool okbf1 = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, i, gAtrHandle, ov, phv);
-         bool okbf2 = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, i, gAtrHandle2, ov2, phv2);
-         double basep = (i < rates_total ? close[i] : close[rates_total-1]);
-         double scale = (basep != 0.0 ? (OutputScale / basep) : OutputScale);
-         gOut[i] = (okbf1 ? ov * scale : 0.0);
-         gOut2[i] = (okbf2 ? ov2 * scale : 0.0);
-         gPhaseOut[i] = (okbf1 ? phv : gLastPhase);
-      }
-      need_zz = true;
-      last_zz_time = time[0];
-   }
-
    if(rates_total > 1 && time[0] != last_zz_time)
    {
       last_zz_time = time[0];
-      need_zz = true;
-   }
-
-   if(need_zz)
-   {
       static int zz_idx[];
       static int zz_dir[];
       int zz_pivots = 0;
