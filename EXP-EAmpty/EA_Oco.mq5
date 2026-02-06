@@ -37,6 +37,8 @@ input bool HedgeStopEnabled = false;
 input double HedgeExtraPips = 2.0;
 input double HedgeCoverPercent = 100.0;
 input int HedgeExpirationMinutes = 0;
+input bool AttachPhaseClock = true;
+input int PhaseClockWindow = 1;
 
 input int LogLevel = 1; // 0=ERR,1=INFO,2=DEBUG
 input bool PrintToJournal = true;
@@ -70,6 +72,8 @@ int OnInit()
    cfg.HedgeExtraPips = HedgeExtraPips;
    cfg.HedgeCoverPercent = HedgeCoverPercent;
    cfg.HedgeExpirationMinutes = HedgeExpirationMinutes;
+   cfg.AttachPhaseClock = AttachPhaseClock;
+   cfg.PhaseClockWindow = PhaseClockWindow;
    cfg.LogLevel = LogLevel;
    cfg.PrintToJournal = PrintToJournal;
 

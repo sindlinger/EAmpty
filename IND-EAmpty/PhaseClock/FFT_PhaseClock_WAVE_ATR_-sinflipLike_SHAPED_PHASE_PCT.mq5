@@ -9,14 +9,18 @@
 #property indicator_separate_window
 //#property indicator_digits 8
 #define INDICATOR_NAME "FFT_PhaseClock_WAVE_ATR_PCT"
-#property indicator_buffers 3
-#property indicator_plots   2
+#property indicator_buffers 5
+#property indicator_plots   3
 #property indicator_type1   DRAW_LINE
 #property indicator_color1  clrDodgerBlue
 #property indicator_label1  "ATR% 17"
 #property indicator_type2   DRAW_LINE
 #property indicator_color2  clrOrangeRed
 #property indicator_label2  "ATR% 26"
+#property indicator_type3   DRAW_COLOR_LINE
+#property indicator_color3  clrDodgerBlue, clrRed
+#property indicator_label3  "Wave ZZ"
+#property indicator_width3  2
 
 
 
@@ -125,10 +129,30 @@ input color        ClockCenterColor   = clrWhite;
 
 input bool         ClockShowText      = true;
 
+// ZigZag sobre a wave (buffer 0)
+input bool         ShowWaveZigZag   = true;
+input double       ZZDeviation     = 0.0;   // desvio mínimo (unidade da wave)
+input int          ZZMinBars        = 3;    // barras mínimas por swing
+input int          ZZLookback       = 1200; // barras analisadas
+input int          ZZLongAvgCount   = 20;   // swings para média longa
+input int          ZZMidAvgCount    = 10;   // swings para média média
+input bool         ShowZigZagStats  = true;
+input int          ZZTextXOffset    = 110;
+input int          ZZTextYOffset    = 80;
+
+// ZigZag color no preço
+input bool         ShowPriceZigZag  = true;
+input int          PriceZZWidth     = 2;
+input color        PriceZZUpColor   = clrDodgerBlue;
+input color        PriceZZDownColor = clrRed;
+input int          PriceZZMaxSegments = 120;
+
 // ---------------- buffers ----------------
 double gOut[];
 double gOut2[];
 double gPhaseOut[];
+double gZZWave[];
+double gZZWaveColor[];
 
 // ---------------- internals ----------------
 int      gAtrHandle = INVALID_HANDLE;
@@ -139,6 +163,7 @@ double   gMask[];
 double   gLastPhase = 0.0;
 bool     gMaskOk = true;
 bool     gWarnedBand = false;
+int      gPriceZZCount = 0;
 
 // Subwindow onde o indicador está
 int      gSubWin = -1;
@@ -516,6 +541,8 @@ string ClockDotName(const int idx){ return gObjPrefix + StringFormat("RING_%d", 
 string ClockHandSegName(const int idx){ return gObjPrefix + StringFormat("HAND_%d", idx); }
 string ClockCenterName(){ return gObjPrefix + "CENTER"; }
 string ClockTextName(){ return gObjPrefix + "TEXT"; }
+string ZZTextName(const int idx){ return gObjPrefix + StringFormat("ZZTEXT_%d", idx); }
+string PriceZZName(const int idx){ return gObjPrefix + StringFormat("PZZ_%d", idx); }
 
 void EnsureSubWin()
 {
@@ -528,9 +555,8 @@ void SetLabel(const string name, const int xdist, const int ydist, const color c
 {
    EnsureSubWin();
    if(ObjectFind(0, name) < 0)
-      ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+      ObjectCreate(0, name, OBJ_LABEL, gSubWin, 0, 0);
 
-   ObjectSetInteger(0, name, OBJPROP_CHART_ID, gSubWin);
    ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
    ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_CENTER);
    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
@@ -550,6 +576,22 @@ void DeleteClockObjects()
    for(int i=0;i<CLOCK_MAX_HAND;i++) ObjectDelete(0, ClockHandSegName(i));
    ObjectDelete(0, ClockCenterName());
    ObjectDelete(0, ClockTextName());
+}
+
+void DeleteZZText()
+{
+   for(int i=0;i<8;i++) ObjectDelete(0, ZZTextName(i));
+}
+
+void DeletePriceZZ()
+{
+   int total = ObjectsTotal(0, 0, -1);
+   for(int i=total-1; i>=0; i--)
+   {
+      string name = ObjectName(0, i, 0, -1);
+      if(StringFind(name, gObjPrefix + "PZZ_") == 0)
+         ObjectDelete(0, name);
+   }
 }
 
 void UpdatePhaseClock(const double phase)
@@ -660,15 +702,224 @@ void UpdatePhaseClock(const double phase)
    }
 }
 
+// ---------------- ZigZag helpers ----------------
+void DrawPriceZigZag(const int pivots, const int &pidx[], const int &pdir[], const datetime &time[], const double &high[], const double &low[])
+{
+   if(!ShowPriceZigZag) { DeletePriceZZ(); gPriceZZCount = 0; return; }
+   if(pivots < 2) return;
+
+   int start = 0;
+   int total_segs = pivots - 1;
+   if(PriceZZMaxSegments > 0 && total_segs > PriceZZMaxSegments)
+      start = total_segs - PriceZZMaxSegments;
+
+   int seg = 0;
+   for(int k=start; k<pivots-1; k++)
+   {
+      int i1 = pidx[k];
+      int i2 = pidx[k+1];
+      if(i1 < 0 || i2 < 0) continue;
+      if(i1 == i2) continue;
+
+      double p1 = (pdir[k] > 0 ? high[i1] : low[i1]);
+      double p2 = (pdir[k+1] > 0 ? high[i2] : low[i2]);
+      color col = (p2 >= p1 ? PriceZZUpColor : PriceZZDownColor);
+
+      string name = PriceZZName(seg++);
+      if(ObjectFind(0, name) < 0)
+         ObjectCreate(0, name, OBJ_TREND, 0, time[i1], p1, time[i2], p2);
+      else
+      {
+         ObjectMove(0, name, 0, time[i1], p1);
+         ObjectMove(0, name, 1, time[i2], p2);
+      }
+      ObjectSetInteger(0, name, OBJPROP_COLOR, col);
+      ObjectSetInteger(0, name, OBJPROP_WIDTH, PriceZZWidth);
+      ObjectSetInteger(0, name, OBJPROP_RAY, false);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   }
+
+   // remove segmentos antigos não usados
+   for(int i=seg; i<gPriceZZCount; i++)
+      ObjectDelete(0, PriceZZName(i));
+   gPriceZZCount = seg;
+}
+
+void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
+{
+   if(!ShowZigZagStats){ DeleteZZText(); return; }
+   EnsureSubWin();
+
+   int last = pivots - 1;
+   int prev = pivots - 2;
+
+   int curr_len = (last >= 0 ? pidx[last] : 0);
+   int prev_len = (prev >= 0 ? (pidx[prev] - pidx[last]) : 0);
+
+   // médias
+   int total_swings = MathMax(0, pivots - 1);
+   double sum_long = 0.0, sum_mid = 0.0;
+   int count_long = 0, count_mid = 0;
+
+   double sum_up = 0.0, sum_dn = 0.0;
+   int count_up = 0, count_dn = 0;
+
+   for(int k=0; k<total_swings; k++)
+   {
+      int len = pidx[k] - pidx[k+1];
+      if(len <= 0) continue;
+      if(count_long < ZZLongAvgCount){ sum_long += len; count_long++; }
+      if(count_mid < ZZMidAvgCount){ sum_mid += len; count_mid++; }
+
+      if(pdir[k] < 0 && pdir[k+1] > 0) { sum_up += len; count_up++; }
+      else if(pdir[k] > 0 && pdir[k+1] < 0) { sum_dn += len; count_dn++; }
+   }
+
+   double avg_long = (count_long > 0 ? sum_long / count_long : 0.0);
+   double avg_mid  = (count_mid > 0 ? sum_mid / count_mid : 0.0);
+   double avg_up   = (count_up > 0 ? sum_up / count_up : 0.0);
+   double avg_dn   = (count_dn > 0 ? sum_dn / count_dn : 0.0);
+
+   double next_top = -1.0;
+   double next_bot = -1.0;
+   if(last >= 0)
+   {
+      if(pdir[last] < 0) // último pivot é fundo -> subindo
+      {
+         if(avg_up > 0) next_top = avg_up - curr_len;
+         if(avg_up > 0 && avg_dn > 0) next_bot = avg_up + avg_dn - curr_len;
+      }
+      else if(pdir[last] > 0) // último pivot é topo -> caindo
+      {
+         if(avg_dn > 0) next_bot = avg_dn - curr_len;
+         if(avg_up > 0 && avg_dn > 0) next_top = avg_dn + avg_up - curr_len;
+      }
+   }
+
+   int y = ZZTextYOffset;
+   string l1 = StringFormat("C:%d  P:%d", curr_len, prev_len);
+   string l2 = StringFormat("L:%.1f  M:%.1f", avg_long, avg_mid);
+   string l3 = (next_top >= 0 ? StringFormat("TOP %.0f", next_top) : "TOP -");
+   string l4 = (next_bot >= 0 ? StringFormat("BOT %.0f", next_bot) : "BOT -");
+
+   SetLabel(ZZTextName(0), ZZTextXOffset, y, clrWhite, 10, l1);
+   SetLabel(ZZTextName(1), ZZTextXOffset, y + 14, clrSilver, 10, l2);
+   SetLabel(ZZTextName(2), ZZTextXOffset, y + 28, clrDodgerBlue, 10, l3);
+   SetLabel(ZZTextName(3), ZZTextXOffset, y + 42, clrRed, 10, l4);
+}
+
+int BuildWaveZigZag(const int rates_total, const double &wave[], int &pivots, int &pidx[], int &pdir[])
+{
+   pivots = 0;
+   int maxbars = rates_total - 1;
+   if(ZZLookback > 0 && maxbars > ZZLookback) maxbars = ZZLookback;
+   if(maxbars < 2) return 0;
+
+   ArrayResize(pidx, 0);
+   ArrayResize(pdir, 0);
+
+   int last_idx = maxbars;
+   double last_val = wave[last_idx];
+   int last_dir = 0;
+
+   for(int i=maxbars-1; i>=0; i--)
+   {
+      double v = wave[i];
+      if(v == EMPTY_VALUE) continue;
+
+      if(last_dir == 0)
+      {
+         if(v >= last_val + ZZDeviation){ last_dir = 1; last_idx = i; last_val = v; }
+         else if(v <= last_val - ZZDeviation){ last_dir = -1; last_idx = i; last_val = v; }
+         else
+         {
+            if(v > last_val){ last_idx = i; last_val = v; }
+            if(v < last_val){ last_idx = i; last_val = v; }
+         }
+      }
+      else if(last_dir > 0) // subindo
+      {
+         if(v > last_val){ last_idx = i; last_val = v; }
+         if(v <= last_val - ZZDeviation && (last_idx - i) >= ZZMinBars)
+         {
+            int n = ArraySize(pidx);
+            ArrayResize(pidx, n+1);
+            ArrayResize(pdir, n+1);
+            pidx[n] = last_idx;
+            pdir[n] = 1; // topo
+            last_dir = -1;
+            last_idx = i;
+            last_val = v;
+         }
+      }
+      else // descendo
+      {
+         if(v < last_val){ last_idx = i; last_val = v; }
+         if(v >= last_val + ZZDeviation && (last_idx - i) >= ZZMinBars)
+         {
+            int n = ArraySize(pidx);
+            ArrayResize(pidx, n+1);
+            ArrayResize(pdir, n+1);
+            pidx[n] = last_idx;
+            pdir[n] = -1; // fundo
+            last_dir = 1;
+            last_idx = i;
+            last_val = v;
+         }
+      }
+   }
+
+   // adiciona último pivot (corrente)
+   int n = ArraySize(pidx);
+   ArrayResize(pidx, n+1);
+   ArrayResize(pdir, n+1);
+   pidx[n] = last_idx;
+   pdir[n] = (last_dir >= 0 ? 1 : -1);
+
+   pivots = ArraySize(pidx);
+   return pivots;
+}
+
+void FillWaveZigZag(const int pivots, const int &pidx[], const int &pdir[], const double &wave[])
+{
+   ArrayInitialize(gZZWave, EMPTY_VALUE);
+   ArrayInitialize(gZZWaveColor, 0.0);
+   if(!ShowWaveZigZag || pivots < 2) return;
+
+   for(int k=0; k<pivots-1; k++)
+   {
+      int i1 = pidx[k];
+      int i2 = pidx[k+1];
+      if(i1 < i2) { int tmp=i1; i1=i2; i2=tmp; }
+      if(i1 == i2) continue;
+      double v1 = wave[i1];
+      double v2 = wave[i2];
+      int color_idx = (v2 >= v1 ? 0 : 1);
+      int span = i1 - i2;
+      for(int i=i1; i>=i2; i--)
+      {
+         double t = (double)(i1 - i) / (double)span;
+         gZZWave[i] = v1 + (v2 - v1) * t;
+         gZZWaveColor[i] = (double)color_idx;
+      }
+   }
+}
+
 // ---------------- MT5 lifecycle ----------------
 int OnInit()
 {
+   IndicatorSetString(INDICATOR_SHORTNAME, INDICATOR_NAME);
    SetIndexBuffer(0, gOut, INDICATOR_DATA);
    SetIndexBuffer(1, gOut2, INDICATOR_DATA);
    SetIndexBuffer(2, gPhaseOut, INDICATOR_CALCULATIONS);
+   SetIndexBuffer(3, gZZWave, INDICATOR_DATA);
+   SetIndexBuffer(4, gZZWaveColor, INDICATOR_COLOR_INDEX);
    ArraySetAsSeries(gOut, true);
    ArraySetAsSeries(gOut2, true);
    ArraySetAsSeries(gPhaseOut, true);
+   ArraySetAsSeries(gZZWave, true);
+   ArraySetAsSeries(gZZWaveColor, true);
    IndicatorSetInteger(INDICATOR_DIGITS, 8);
 
    int N = NextPow2(MathMax(32, FFTSize));
@@ -687,6 +938,9 @@ int OnInit()
 
    PlotIndexSetInteger(0, PLOT_DRAW_BEGIN, N);
    PlotIndexSetInteger(1, PLOT_DRAW_BEGIN, N);
+   PlotIndexSetInteger(2, PLOT_DRAW_BEGIN, 0);
+   PlotIndexSetInteger(2, PLOT_COLOR_INDEXES, 2);
+   PlotIndexSetInteger(2, PLOT_LINE_WIDTH, 2);
    return INIT_SUCCEEDED;
 }
 
@@ -697,6 +951,8 @@ void OnDeinit(const int reason)
    if(gAtrHandle2 != INVALID_HANDLE)
       IndicatorRelease(gAtrHandle2);
    DeleteClockObjects();
+   DeleteZZText();
+   DeletePriceZZ();
 }
 
 int OnCalculate(const int rates_total,
@@ -715,6 +971,30 @@ int OnCalculate(const int rates_total,
    {
       UpdatePhaseClock(gLastPhase);
       return rates_total;
+   }
+
+   static datetime s_last_bar = 0;
+   static double s_prev_out = 0.0;
+   static double s_prev_out2 = 0.0;
+   static double s_prev_ph = 0.0;
+
+   if(rates_total > 1 && time[0] != s_last_bar)
+   {
+      if(s_last_bar != 0)
+      {
+         int maxshift = rates_total - 1;
+         if(ZZLookback > 0 && maxshift > ZZLookback) maxshift = ZZLookback;
+         for(int i=maxshift; i>=2; i--)
+         {
+            gOut[i] = gOut[i-1];
+            gOut2[i] = gOut2[i-1];
+            gPhaseOut[i] = gPhaseOut[i-1];
+         }
+         gOut[1] = s_prev_out;
+         gOut2[1] = s_prev_out2;
+         gPhaseOut[1] = s_prev_ph;
+      }
+      s_last_bar = time[0];
    }
 
    // rebuild se parâmetros mudaram
@@ -740,6 +1020,7 @@ int OnCalculate(const int rates_total,
 
       PlotIndexSetInteger(0, PLOT_DRAW_BEGIN, gN);
       PlotIndexSetInteger(1, PLOT_DRAW_BEGIN, gN);
+      PlotIndexSetInteger(2, PLOT_DRAW_BEGIN, 0);
    }
 
    double outv=0.0, ph=0.0;
@@ -764,6 +1045,24 @@ int OnCalculate(const int rates_total,
       gOut2[0] = outv2 * pct_scale;
    else
       gOut2[0] = 0.0;
+
+   // ZigZag/contagens: atualiza apenas em nova barra
+   static datetime last_zz_time = 0;
+   if(rates_total > 1 && time[0] != last_zz_time)
+   {
+      last_zz_time = time[0];
+      static int zz_idx[];
+      static int zz_dir[];
+      int zz_pivots = 0;
+      BuildWaveZigZag(rates_total, gOut, zz_pivots, zz_idx, zz_dir);
+      FillWaveZigZag(zz_pivots, zz_idx, zz_dir, gOut);
+      UpdateZZStats(zz_pivots, zz_idx, zz_dir);
+      DrawPriceZigZag(zz_pivots, zz_idx, zz_dir, time, high, low);
+   }
+
+   s_prev_out = gOut[0];
+   s_prev_out2 = gOut2[0];
+   s_prev_ph = gPhaseOut[0];
 
    return rates_total;
 }

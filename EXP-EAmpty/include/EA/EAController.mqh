@@ -22,13 +22,16 @@ private:
    CStopLoss m_slm;
 
    int m_atrtrail_handle;
+   int m_phase_handle;
    datetime m_last_signal_bar;
    ENUM_TIMEFRAMES m_tf;
 
    string m_btick_path;
    string m_atrtrail_path;
+   string m_phase_path;
    bool m_btick_loaded;
    bool m_atr_loaded;
+   bool m_phase_loaded;
    datetime m_last_cross_bar;
    datetime m_last_cross_time;
    int m_last_cross_dir;

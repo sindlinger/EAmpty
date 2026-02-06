@@ -32,6 +32,8 @@ struct SConfig
    double HedgeExtraPips;
    double HedgeCoverPercent;
    int HedgeExpirationMinutes;
+   bool AttachPhaseClock;
+   int PhaseClockWindow;
 
    int LogLevel;
    bool PrintToJournal;

@@ -1,11 +1,14 @@
 CEAController::CEAController()
 {
    m_atrtrail_handle = INVALID_HANDLE;
+   m_phase_handle = INVALID_HANDLE;
    m_last_signal_bar = 0;
    m_btick_path = "IND-Btick\\BTick_v2.0.5_FFT";
    m_atrtrail_path = "ATR_Trailing_Stop_1_Buffer";
+   m_phase_path = "IND-EAmpty\\PhaseClock\\FFT_PhaseClock_WAVE_ATR_-sinflipLike_SHAPED_PHASE_PCT";
    m_btick_loaded = false;
    m_atr_loaded = false;
+   m_phase_loaded = false;
    m_last_cross_bar = 0;
    m_last_cross_time = 0;
    m_last_cross_dir = 0;
@@ -44,6 +47,24 @@ bool CEAController::Init(const SConfig &cfg)
       m_atr_loaded = true;
    }
 
+   if(m_cfg.AttachPhaseClock)
+   {
+      m_phase_handle = iCustom(_Symbol, m_tf, m_phase_path);
+      if(m_phase_handle == INVALID_HANDLE)
+      {
+         m_log.Error("PhaseClock handle failed.");
+      }
+      else
+      {
+         int win = m_cfg.PhaseClockWindow;
+         if(win < 1) win = 1;
+         if(ChartIndicatorAdd(0, win, m_phase_handle))
+            m_phase_loaded = true;
+         else
+            m_log.Error("PhaseClock ChartIndicatorAdd failed.");
+      }
+   }
+
    return true;
 }
 
@@ -53,6 +74,11 @@ void CEAController::Deinit()
    {
       IndicatorRelease(m_atrtrail_handle);
       m_atrtrail_handle = INVALID_HANDLE;
+   }
+   if(m_phase_handle != INVALID_HANDLE)
+   {
+      IndicatorRelease(m_phase_handle);
+      m_phase_handle = INVALID_HANDLE;
    }
    m_sig.Deinit();
 }
