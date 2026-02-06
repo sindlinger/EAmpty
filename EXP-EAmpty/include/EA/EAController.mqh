@@ -45,6 +45,9 @@ public:
    bool Init(const SConfig &cfg);
    void Deinit();
    void OnTick();
+   void OnTradeTransaction(const MqlTradeTransaction &trans,
+                           const MqlTradeRequest &request,
+                           const MqlTradeResult &result);
 
 private:
    void UpdateSeqClose(const datetime bar_time);
@@ -54,6 +57,7 @@ private:
    void UpdateHedgeStops();
    bool GetTrailLevel(const int shift, double &level);
    void UpdateChartStatus();
+   string DealReasonText(const long reason) const;
 };
 
 #include "EAController.Init.mqh"
@@ -63,5 +67,6 @@ private:
 #include "EAController.Trailing.mqh"
 #include "EAController.Hedge.mqh"
 #include "EAController.Status.mqh"
+#include "EAController.Trades.mqh"
 
 #endif
