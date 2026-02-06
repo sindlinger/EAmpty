@@ -21,9 +21,14 @@ void CEAController::OnTradeTransaction(const MqlTradeTransaction &trans,
    double volume = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
    ulong position_id = (ulong)HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
    string comment = (string)HistoryDealGetString(trans.deal, DEAL_COMMENT);
+   string tag = "UNK";
+   if(StringFind(comment, "HEDGE:") == 0) tag = "HEDGE";
+   else if(comment == "MAIN") tag = "MAIN";
+   else if(comment == "RUNNER") tag = "RUNNER";
 
-   m_log.Info(StringFormat("Deal exit pos=%I64u reason=%s profit=%.2f price=%.5f vol=%.2f comment=%s",
+   m_log.Info(StringFormat("Deal exit pos=%I64u tag=%s reason=%s profit=%.2f price=%.5f vol=%.2f comment=%s",
                            position_id,
+                           tag,
                            DealReasonText(reason),
                            profit,
                            price,

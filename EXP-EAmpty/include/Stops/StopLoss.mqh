@@ -84,6 +84,14 @@ public:
       double min_sl_dist = stop_level + spread;
       double min_tp_dist = stop_level;
 
+      // se SL veio do ATR e está muito perto, invalida a entrada
+      if(sl_from_trail && sl > 0.0)
+      {
+         double dist = MathAbs(entry_price - sl);
+         if(dist < min_sl_dist)
+            return false;
+      }
+
       if(dir > 0)
       {
          if(!sl_from_trail && sl > 0.0 && (entry_price - sl) < min_sl_dist)
