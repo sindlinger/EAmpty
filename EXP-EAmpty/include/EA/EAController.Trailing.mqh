@@ -7,6 +7,9 @@ void CEAController::ApplyTrailing()
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   double stop_level = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * point;
+   double freeze_level = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL) * point;
+   double min_dist = stop_level + freeze_level;
 
    double trail = 0.0;
    if(!GetTrailLevel(0, trail)) return;
@@ -21,22 +24,33 @@ void CEAController::ApplyTrailing()
 
       if(type == POSITION_TYPE_BUY)
       {
+         if(trail <= 0.0) continue;
+         double max_sl = bid - min_dist;
+         if(max_sl <= 0.0) continue;
          double new_sl = trail;
+         if(new_sl > max_sl) new_sl = max_sl;
          if(new_sl <= 0.0 || new_sl >= bid) continue;
-         if(sl == 0.0 || new_sl > sl + point)
+         double new_sl_n = NormalizeDouble(new_sl, digits);
+         if(sl > 0.0 && MathAbs(new_sl_n - sl) < point) continue;
+         if(sl == 0.0 || new_sl_n > sl + point)
          {
-            if(m_broker.ModifySL(ticket, NormalizeDouble(new_sl, digits)))
-               m_log.Info(StringFormat("Trailing BUY ticket=%I64u sl=%.5f", ticket, new_sl));
+            if(m_broker.ModifySL(ticket, new_sl_n))
+               m_log.Info(StringFormat("Trailing BUY ticket=%I64u sl=%.5f", ticket, new_sl_n));
          }
       }
       else if(type == POSITION_TYPE_SELL)
       {
+         if(trail <= 0.0) continue;
+         double min_sl = ask + min_dist;
          double new_sl = trail;
+         if(new_sl < min_sl) new_sl = min_sl;
          if(new_sl <= 0.0 || new_sl <= ask) continue;
-         if(sl == 0.0 || new_sl < sl - point)
+         double new_sl_n = NormalizeDouble(new_sl, digits);
+         if(sl > 0.0 && MathAbs(new_sl_n - sl) < point) continue;
+         if(sl == 0.0 || new_sl_n < sl - point)
          {
-            if(m_broker.ModifySL(ticket, NormalizeDouble(new_sl, digits)))
-               m_log.Info(StringFormat("Trailing SELL ticket=%I64u sl=%.5f", ticket, new_sl));
+            if(m_broker.ModifySL(ticket, new_sl_n))
+               m_log.Info(StringFormat("Trailing SELL ticket=%I64u sl=%.5f", ticket, new_sl_n));
          }
       }
    }
