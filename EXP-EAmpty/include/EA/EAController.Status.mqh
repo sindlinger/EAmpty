@@ -1,5 +1,6 @@
 void CEAController::UpdateChartStatus()
 {
+   if(!m_cfg.ShowChartStatus) return;
    string btick_file = m_btick_path + ".mq5";
    string atr_file = m_atrtrail_path + ".mq5";
    string ph_file = m_phase_path + ".mq5";

@@ -36,6 +36,7 @@ struct SConfig
    int PhaseClockWindow;
    bool AttachPriceZigZag;
    int PriceZigZagWindow;
+   bool ShowChartStatus;
 
    int LogLevel;
    bool PrintToJournal;

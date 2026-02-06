@@ -41,6 +41,7 @@ input bool AttachPhaseClock = true;
 input int PhaseClockWindow = 1;
 input bool AttachPriceZigZag = true;
 input int PriceZigZagWindow = 0;
+input bool ShowChartStatus = false;
 
 input int LogLevel = 1; // 0=ERR,1=INFO,2=DEBUG
 input bool PrintToJournal = true;
@@ -78,6 +79,7 @@ int OnInit()
    cfg.PhaseClockWindow = PhaseClockWindow;
    cfg.AttachPriceZigZag = AttachPriceZigZag;
    cfg.PriceZigZagWindow = PriceZigZagWindow;
+   cfg.ShowChartStatus = ShowChartStatus;
    cfg.LogLevel = LogLevel;
    cfg.PrintToJournal = PrintToJournal;
 
