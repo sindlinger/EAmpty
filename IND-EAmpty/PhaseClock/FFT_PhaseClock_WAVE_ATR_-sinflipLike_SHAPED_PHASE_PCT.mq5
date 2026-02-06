@@ -138,7 +138,17 @@ input int          ZZLongAvgCount   = 20;   // swings para média longa
 input int          ZZMidAvgCount    = 10;   // swings para média média
 input bool         ShowZigZagStats  = true;
 input int          ZZTextXOffset    = 110;
-input int          ZZTextYOffset    = 80;
+input int          ZZTextYOffset    = 40;
+
+input bool         ShowPriceStats   = true;
+input int          PriceStatsXOffset = 20;
+input int          PriceStatsYOffset = 20;
+input int          PriceStatsBoxWidth = 120;
+input int          PriceStatsBoxHeight = 60;
+
+input int          StatsBoxAlpha    = 160; // 0..255
+input color        StatsBoxBgColor  = clrBlack;
+input color        StatsBoxBorderColor = clrDimGray;
 
 
 // ---------------- buffers ----------------
@@ -535,6 +545,8 @@ string ClockHandSegName(const int idx){ return gObjPrefix + StringFormat("HAND_%
 string ClockCenterName(){ return gObjPrefix + "CENTER"; }
 string ClockTextName(){ return gObjPrefix + "TEXT"; }
 string ZZTextName(const int idx){ return gObjPrefix + StringFormat("ZZTEXT_%d", idx); }
+string PriceStatsTextName(const int idx){ return gObjPrefix + StringFormat("PSTATS_%d", idx); }
+string PriceStatsBoxName(){ return gObjPrefix + "PSTATS_BOX"; }
 
 void EnsureSubWin()
 {
@@ -561,6 +573,41 @@ void SetLabel(const string name, const int xdist, const int ydist, const color c
    ObjectSetString (0, name, OBJPROP_TEXT, text);
 }
 
+void SetLabelWin(const string name, const int win, const int xdist, const int ydist, const color col, const int fsz, const string text)
+{
+   if(ObjectFind(0, name) < 0)
+      ObjectCreate(0, name, OBJ_LABEL, win, 0, 0);
+
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, ydist);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, col);
+   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fsz);
+   ObjectSetString (0, name, OBJPROP_FONT, "Arial");
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetString (0, name, OBJPROP_TEXT, text);
+}
+
+void SetBoxWin(const string name, const int win, const int xdist, const int ydist, const int w, const int h, const color bg, const color border)
+{
+   if(ObjectFind(0, name) < 0)
+      ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, win, 0, 0);
+
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, ydist);
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, border);
+   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
+   ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+   ObjectSetInteger(0, name, OBJPROP_BACK, true);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+}
+
 void DeleteClockObjects()
 {
    for(int i=0;i<12;i++) ObjectDelete(0, ClockNumName(i));
@@ -573,6 +620,12 @@ void DeleteClockObjects()
 void DeleteZZText()
 {
    for(int i=0;i<8;i++) ObjectDelete(0, ZZTextName(i));
+}
+
+void DeletePriceStats()
+{
+   for(int i=0;i<8;i++) ObjectDelete(0, PriceStatsTextName(i));
+   ObjectDelete(0, PriceStatsBoxName());
 }
 
 
@@ -687,7 +740,7 @@ void UpdatePhaseClock(const double phase)
 // ---------------- ZigZag helpers ----------------
 void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
 {
-   if(!ShowZigZagStats){ DeleteZZText(); return; }
+   if(!ShowZigZagStats){ DeleteZZText(); DeletePriceStats(); return; }
    EnsureSubWin();
 
    int last = pivots - 1;
@@ -737,15 +790,36 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    }
 
    int y = ZZTextYOffset;
-   string l1 = StringFormat("C:%d  P:%d", curr_len, prev_len);
-   string l2 = StringFormat("L:%.1f  M:%.1f", avg_long, avg_mid);
-   string l3 = (next_top >= 0 ? StringFormat("TOP %.0f", next_top) : "TOP -");
-   string l4 = (next_bot >= 0 ? StringFormat("BOT %.0f", next_bot) : "BOT -");
+   // barras por ciclo (aprox) = 2 * swing médio
+   double curr_cycle = (double)curr_len * 2.0;
+   double prev_cycle = (double)prev_len * 2.0;
+   double long_cycle = avg_long * 2.0;
+   double mid_cycle  = avg_mid * 2.0;
+
+   string l1 = StringFormat("A:%.0f  P:%.0f", curr_cycle, prev_cycle);
+   string l2 = StringFormat("L:%.0f  M:%.0f", long_cycle, mid_cycle);
+   string l3 = (next_top >= 0 ? StringFormat("U %.0f", next_top) : "U -");
+   string l4 = (next_bot >= 0 ? StringFormat("D %.0f", next_bot) : "D -");
 
    SetLabel(ZZTextName(0), ZZTextXOffset, y, clrWhite, 10, l1);
    SetLabel(ZZTextName(1), ZZTextXOffset, y + 14, clrSilver, 10, l2);
    SetLabel(ZZTextName(2), ZZTextXOffset, y + 28, clrDodgerBlue, 10, l3);
    SetLabel(ZZTextName(3), ZZTextXOffset, y + 42, clrRed, 10, l4);
+
+   if(ShowPriceStats)
+   {
+      color bg = (color)ColorToARGB(StatsBoxBgColor, (uchar)StatsBoxAlpha);
+      SetBoxWin(PriceStatsBoxName(), 0, PriceStatsXOffset - 6, PriceStatsYOffset - 6,
+                PriceStatsBoxWidth, PriceStatsBoxHeight, bg, StatsBoxBorderColor);
+      SetLabelWin(PriceStatsTextName(0), 0, PriceStatsXOffset, PriceStatsYOffset, clrWhite, 10, l1);
+      SetLabelWin(PriceStatsTextName(1), 0, PriceStatsXOffset, PriceStatsYOffset + 14, clrSilver, 10, l2);
+      SetLabelWin(PriceStatsTextName(2), 0, PriceStatsXOffset, PriceStatsYOffset + 28, clrDodgerBlue, 10, l3);
+      SetLabelWin(PriceStatsTextName(3), 0, PriceStatsXOffset, PriceStatsYOffset + 42, clrRed, 10, l4);
+   }
+   else
+   {
+      DeletePriceStats();
+   }
 }
 
 int BuildWaveZigZag(const int rates_total, const double &wave[], int &pivots, int &pidx[], int &pdir[])
@@ -891,6 +965,7 @@ void OnDeinit(const int reason)
       IndicatorRelease(gAtrHandle2);
    DeleteClockObjects();
    DeleteZZText();
+   DeletePriceStats();
 }
 
 int OnCalculate(const int rates_total,
