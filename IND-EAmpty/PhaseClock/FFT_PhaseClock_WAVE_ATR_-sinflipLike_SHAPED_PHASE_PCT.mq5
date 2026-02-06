@@ -438,6 +438,52 @@ bool FetchSourceSeries(const int total, const double &open[], const double &high
    return true;
 }
 
+bool FetchSourceSeriesShift(const int total, const double &open[], const double &high[], const double &low[], const double &close[],
+                            const long &tick_volume[], const long &volume_arr[],
+                            const int shift,
+                            double &src_series[], const int needN, const int atr_handle)
+{
+   ArrayResize(src_series, needN);
+   ArraySetAsSeries(src_series, true);
+
+   if(FeedSource == FEED_ATR)
+   {
+      int handle = atr_handle;
+      if(handle == INVALID_HANDLE) return false;
+      int got = CopyBuffer(handle, 0, shift, needN, src_series);
+      return (got > 0);
+   }
+
+   for(int i=0; i<needN; i++)
+   {
+      int idx = i + shift;
+      double v = 0.0;
+      switch(FeedSource)
+      {
+         case FEED_TR: v = TrueRangeAtShift(high, low, close, idx, total); break;
+         case FEED_CLOSE: v = (idx < total) ? close[idx] : close[total-1]; break;
+         case FEED_HL2: v = ((idx < total) ? (high[idx]+low[idx]) : (high[total-1]+low[total-1]))*0.5; break;
+         case FEED_HLC3:
+            v = (idx < total) ? (high[idx]+low[idx]+close[idx])/3.0 : (high[total-1]+low[total-1]+close[total-1])/3.0;
+            break;
+         case FEED_OHLC4:
+            v = (idx < total) ? (open[idx]+high[idx]+low[idx]+close[idx])/4.0 : (open[total-1]+high[total-1]+low[total-1]+close[total-1])/4.0;
+            break;
+         case FEED_VOLUME:
+            v = (double)((idx < total) ? volume_arr[idx] : volume_arr[total-1]);
+            break;
+         case FEED_TICKVOLUME:
+            v = (double)((idx < total) ? tick_volume[idx] : tick_volume[total-1]);
+            break;
+         default:
+            v = (idx < total) ? close[idx] : close[total-1];
+            break;
+      }
+      src_series[i] = v;
+   }
+   return true;
+}
+
 bool ComputeBar0Phase(const int total,
                       const double &open[], const double &high[], const double &low[], const double &close[],
                       const long &tick_volume[], const long &volume_arr[],
@@ -530,6 +576,93 @@ bool ComputeBar0Phase(const int total,
    }
 
    if(!MathIsValidNumber(out_value)) out_value = 0.0;
+   return true;
+}
+
+bool ComputePhaseAtShift(const int total,
+                         const double &open[], const double &high[], const double &low[], const double &close[],
+                         const long &tick_volume[], const long &volume_arr[],
+                         const int shift,
+                         const int atr_handle,
+                         double &out_value, double &out_phase)
+{
+   int N = gN;
+   if(N <= 32) return false;
+
+   double src_series[];
+   if(!FetchSourceSeriesShift(total, open, high, low, close, tick_volume, volume_arr, shift, src_series, N, atr_handle))
+      return false;
+
+   double re[], im[];
+   ArrayResize(re, N);
+   ArrayResize(im, N);
+
+   double mean = 0.0;
+   for(int n=0; n<N; n++)
+   {
+      int sidx = (N-1 - n);
+      double x = GetSeriesSample(src_series, sidx, N);
+      re[n] = x; im[n] = 0.0;
+      mean += x;
+   }
+   mean = (N>0 ? mean/(double)N : 0.0);
+
+   for(int n=0; n<N; n++)
+   {
+      double x = re[n];
+      if(RemoveDC) x -= mean;
+      x *= gWin[n];
+      re[n] = x;
+      im[n] = 0.0;
+   }
+
+   FFT(re, im, false);
+   for(int k=0; k<N; k++)
+   {
+      double m = gMask[k];
+      re[k] *= m;
+      im[k] *= m;
+   }
+   FFT(re, im, true);
+
+   double are = re[N-1];
+   double aim = im[N-1];
+   if(!MathIsValidNumber(are)) are = 0.0;
+   if(!MathIsValidNumber(aim)) aim = 0.0;
+
+   double phase = MathArctan2(aim, are);
+   double amp   = MathSqrt(are*are + aim*aim);
+
+   if(HoldPhaseOnLowAmp && amp < LowAmpEps)
+      phase = gLastPhase;
+
+   gLastPhase = phase;
+   out_phase = phase;
+
+   double s = MathSin(phase);
+   double c = MathCos(phase);
+
+   if(OutputMode == OUT_PHASE_RAD)
+      out_value = phase;
+   else if(OutputMode == OUT_PHASE_DEG)
+      out_value = phase * 180.0 / M_PI;
+   else
+   {
+      double base = (OutputMode == OUT_COS ? c : s);
+      double shaped = base;
+
+      if(WaveShape == SHAPE_TRIANGLE_MIX)
+      {
+         double mix = TriangleMix;
+         if(mix < 0.0) mix = 0.0;
+         if(mix > 1.0) mix = 1.0;
+
+         double tri = (2.0/M_PI) * MathAsin(base);
+         shaped = (1.0 - mix) * base + mix * tri;
+      }
+
+      out_value = shaped;
+   }
    return true;
 }
 
@@ -798,10 +931,10 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    }
 
    int y = ZZTextYOffset;
-   string l1 = StringFormat("C:%d  P:%d", curr_len, prev_len);
+   string l1 = StringFormat("A:%d  P:%d", curr_len, prev_len);
    string l2 = StringFormat("L:%.1f  M:%.1f", avg_long, avg_mid);
-   string l3 = (next_top >= 0 ? StringFormat("TOP %.0f", next_top) : "TOP -");
-   string l4 = (next_bot >= 0 ? StringFormat("BOT %.0f", next_bot) : "BOT -");
+   string l3 = (next_top >= 0 ? StringFormat("U %.0f", next_top) : "U -");
+   string l4 = (next_bot >= 0 ? StringFormat("D %.0f", next_bot) : "D -");
 
    SetLabel(ZZTextName(0), ZZTextXOffset, y, clrWhite, 10, l1);
    SetLabel(ZZTextName(1), ZZTextXOffset, y + 14, clrSilver, 10, l2);
@@ -1046,11 +1179,38 @@ int OnCalculate(const int rates_total,
    else
       gOut2[0] = 0.0;
 
-   // ZigZag/contagens: atualiza apenas em nova barra
+   // ZigZag/contagens: backfill no início + atualiza em nova barra
    static datetime last_zz_time = 0;
+   bool need_zz = false;
+
+   if(prev_calculated == 0 && rates_total > 1)
+   {
+      int maxfill = rates_total - 1;
+      if(ZZLookback > 0 && maxfill > ZZLookback) maxfill = ZZLookback;
+      for(int i=maxfill; i>=0; i--)
+      {
+         double ov=0.0, phv=0.0;
+         double ov2=0.0, phv2=0.0;
+         bool okbf1 = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, i, gAtrHandle, ov, phv);
+         bool okbf2 = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, i, gAtrHandle2, ov2, phv2);
+         double basep = (i < rates_total ? close[i] : close[rates_total-1]);
+         double scale = (basep != 0.0 ? (OutputScale / basep) : OutputScale);
+         gOut[i] = (okbf1 ? ov * scale : 0.0);
+         gOut2[i] = (okbf2 ? ov2 * scale : 0.0);
+         gPhaseOut[i] = (okbf1 ? phv : gLastPhase);
+      }
+      need_zz = true;
+      last_zz_time = time[0];
+   }
+
    if(rates_total > 1 && time[0] != last_zz_time)
    {
       last_zz_time = time[0];
+      need_zz = true;
+   }
+
+   if(need_zz)
+   {
       static int zz_idx[];
       static int zz_dir[];
       int zz_pivots = 0;
