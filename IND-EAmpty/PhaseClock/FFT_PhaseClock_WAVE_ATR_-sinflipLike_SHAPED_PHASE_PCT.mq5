@@ -139,6 +139,8 @@ input int          ZZMidAvgCount    = 10;   // swings para média média
 input bool         ShowZigZagStats  = true;
 input int          ZZTextXOffset    = 110;
 input int          ZZTextYOffset    = 80;
+input int          ZZBoxWidth       = 120;
+input int          ZZBoxHeight      = 60;
 
 // ZigZag color no preço
 input bool         ShowPriceZigZag  = true;
@@ -146,6 +148,15 @@ input int          PriceZZWidth     = 2;
 input color        PriceZZUpColor   = clrDodgerBlue;
 input color        PriceZZDownColor = clrRed;
 input int          PriceZZMaxSegments = 120;
+input bool         ShowPriceZZStats = true;
+input int          PriceZZTextXOffset = 20;
+input int          PriceZZTextYOffset = 20;
+input int          PriceZZBoxWidth    = 120;
+input int          PriceZZBoxHeight   = 60;
+
+input int          StatsBoxAlpha    = 160; // 0..255
+input color        StatsBoxBgColor  = clrBlack;
+input color        StatsBoxBorderColor = clrDimGray;
 
 // ---------------- buffers ----------------
 double gOut[];
@@ -675,6 +686,9 @@ string ClockHandSegName(const int idx){ return gObjPrefix + StringFormat("HAND_%
 string ClockCenterName(){ return gObjPrefix + "CENTER"; }
 string ClockTextName(){ return gObjPrefix + "TEXT"; }
 string ZZTextName(const int idx){ return gObjPrefix + StringFormat("ZZTEXT_%d", idx); }
+string ZZBoxName(){ return gObjPrefix + "ZZBOX"; }
+string PriceZZTextName(const int idx){ return gObjPrefix + StringFormat("PZTXT_%d", idx); }
+string PriceZZBoxName(){ return gObjPrefix + "PZBOX"; }
 string PriceZZName(const int idx){ return gObjPrefix + StringFormat("PZZ_%d", idx); }
 
 void EnsureSubWin()
@@ -702,6 +716,41 @@ void SetLabel(const string name, const int xdist, const int ydist, const color c
    ObjectSetString (0, name, OBJPROP_TEXT, text);
 }
 
+void SetLabelWin(const string name, const int win, const int xdist, const int ydist, const color col, const int fsz, const string text)
+{
+   if(ObjectFind(0, name) < 0)
+      ObjectCreate(0, name, OBJ_LABEL, win, 0, 0);
+
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, ydist);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, col);
+   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fsz);
+   ObjectSetString (0, name, OBJPROP_FONT, "Arial");
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetString (0, name, OBJPROP_TEXT, text);
+}
+
+void SetBoxWin(const string name, const int win, const int xdist, const int ydist, const int w, const int h, const color bg, const color border)
+{
+   if(ObjectFind(0, name) < 0)
+      ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, win, 0, 0);
+
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xdist);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, ydist);
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, border);
+   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
+   ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+   ObjectSetInteger(0, name, OBJPROP_BACK, true);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+}
+
 void DeleteClockObjects()
 {
    for(int i=0;i<12;i++) ObjectDelete(0, ClockNumName(i));
@@ -714,6 +763,13 @@ void DeleteClockObjects()
 void DeleteZZText()
 {
    for(int i=0;i<8;i++) ObjectDelete(0, ZZTextName(i));
+   ObjectDelete(0, ZZBoxName());
+}
+
+void DeletePriceZZText()
+{
+   for(int i=0;i<8;i++) ObjectDelete(0, PriceZZTextName(i));
+   ObjectDelete(0, PriceZZBoxName());
 }
 
 void DeletePriceZZ()
@@ -881,7 +937,7 @@ void DrawPriceZigZag(const int pivots, const int &pidx[], const int &pdir[], con
 
 void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
 {
-   if(!ShowZigZagStats){ DeleteZZText(); return; }
+   if(!ShowZigZagStats){ DeleteZZText(); DeletePriceZZText(); return; }
    EnsureSubWin();
 
    int last = pivots - 1;
@@ -914,6 +970,12 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    double avg_up   = (count_up > 0 ? sum_up / count_up : 0.0);
    double avg_dn   = (count_dn > 0 ? sum_dn / count_dn : 0.0);
 
+   // barras por ciclo (aprox) = 2 * swing médio
+   double curr_cycle = (double)curr_len * 2.0;
+   double prev_cycle = (double)prev_len * 2.0;
+   double long_cycle = avg_long * 2.0;
+   double mid_cycle  = avg_mid * 2.0;
+
    double next_top = -1.0;
    double next_bot = -1.0;
    if(last >= 0)
@@ -931,15 +993,30 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    }
 
    int y = ZZTextYOffset;
-   string l1 = StringFormat("A:%d  P:%d", curr_len, prev_len);
-   string l2 = StringFormat("L:%.1f  M:%.1f", avg_long, avg_mid);
+   string l1 = StringFormat("A:%.0f  P:%.0f", curr_cycle, prev_cycle);
+   string l2 = StringFormat("L:%.0f  M:%.0f", long_cycle, mid_cycle);
    string l3 = (next_top >= 0 ? StringFormat("U %.0f", next_top) : "U -");
    string l4 = (next_bot >= 0 ? StringFormat("D %.0f", next_bot) : "D -");
 
+   color bg = ColorToARGB(StatsBoxBgColor, StatsBoxAlpha);
+   SetBoxWin(ZZBoxName(), gSubWin, ZZTextXOffset - 6, ZZTextYOffset - 6, ZZBoxWidth, ZZBoxHeight, bg, StatsBoxBorderColor);
    SetLabel(ZZTextName(0), ZZTextXOffset, y, clrWhite, 10, l1);
    SetLabel(ZZTextName(1), ZZTextXOffset, y + 14, clrSilver, 10, l2);
    SetLabel(ZZTextName(2), ZZTextXOffset, y + 28, clrDodgerBlue, 10, l3);
    SetLabel(ZZTextName(3), ZZTextXOffset, y + 42, clrRed, 10, l4);
+
+   if(ShowPriceZZStats)
+   {
+      SetBoxWin(PriceZZBoxName(), 0, PriceZZTextXOffset - 6, PriceZZTextYOffset - 6, PriceZZBoxWidth, PriceZZBoxHeight, bg, StatsBoxBorderColor);
+      SetLabelWin(PriceZZTextName(0), 0, PriceZZTextXOffset, PriceZZTextYOffset, clrWhite, 10, l1);
+      SetLabelWin(PriceZZTextName(1), 0, PriceZZTextXOffset, PriceZZTextYOffset + 14, clrSilver, 10, l2);
+      SetLabelWin(PriceZZTextName(2), 0, PriceZZTextXOffset, PriceZZTextYOffset + 28, clrDodgerBlue, 10, l3);
+      SetLabelWin(PriceZZTextName(3), 0, PriceZZTextXOffset, PriceZZTextYOffset + 42, clrRed, 10, l4);
+   }
+   else
+   {
+      DeletePriceZZText();
+   }
 }
 
 int BuildWaveZigZag(const int rates_total, const double &wave[], int &pivots, int &pidx[], int &pdir[])
