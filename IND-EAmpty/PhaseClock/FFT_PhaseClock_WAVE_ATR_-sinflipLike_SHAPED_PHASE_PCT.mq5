@@ -668,7 +668,7 @@ bool ComputePhaseAtShift(const int total,
          if(mix < 0.0) mix = 0.0;
          if(mix > 1.0) mix = 1.0;
 
-         double tri = (2.0/M_PI) * MathAsin(base);
+         double tri = (2.0/M_PI) * MathArcsin(base);
          shaped = (1.0 - mix) * base + mix * tri;
       }
 
@@ -998,7 +998,7 @@ void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
    string l3 = (next_top >= 0 ? StringFormat("U %.0f", next_top) : "U -");
    string l4 = (next_bot >= 0 ? StringFormat("D %.0f", next_bot) : "D -");
 
-   color bg = ColorToARGB(StatsBoxBgColor, StatsBoxAlpha);
+   color bg = (color)ColorToARGB(StatsBoxBgColor, (uchar)StatsBoxAlpha);
    SetBoxWin(ZZBoxName(), gSubWin, ZZTextXOffset - 6, ZZTextYOffset - 6, ZZBoxWidth, ZZBoxHeight, bg, StatsBoxBorderColor);
    SetLabel(ZZTextName(0), ZZTextXOffset, y, clrWhite, 10, l1);
    SetLabel(ZZTextName(1), ZZTextXOffset, y + 14, clrSilver, 10, l2);
