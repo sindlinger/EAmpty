@@ -38,20 +38,11 @@ void CEAController::OnTradeTransaction(const MqlTradeTransaction &trans,
 
 string CEAController::DealReasonText(const long reason) const
 {
-   switch(reason)
-   {
-      case DEAL_REASON_SL: return "SL";
-      case DEAL_REASON_TP: return "TP";
-      case DEAL_REASON_SO: return "STOP_OUT";
-      case DEAL_REASON_CLOSE_BY: return "CLOSE_BY";
-      case DEAL_REASON_ROLLOVER: return "ROLLOVER";
-      case DEAL_REASON_EXTERNAL_CLIENT: return "CLIENT";
-      case DEAL_REASON_MOBILE: return "MOBILE";
-      case DEAL_REASON_WEB: return "WEB";
-      case DEAL_REASON_EXPERT: return "EXPERT";
-      case DEAL_REASON_SPLIT: return "SPLIT";
-      case DEAL_REASON_PROFIT: return "PROFIT";
-      case DEAL_REASON_REST: return "REST";
-      default: return "OTHER";
-   }
+   ENUM_DEAL_REASON r = (ENUM_DEAL_REASON)reason;
+   string s = EnumToString(r);
+   if(StringFind(s, "DEAL_REASON_") == 0)
+      s = StringSubstr(s, 12);
+   if(s == "" || s == "ENUM_DEAL_REASON")
+      s = (string)reason;
+   return s;
 }
