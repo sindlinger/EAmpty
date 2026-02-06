@@ -1203,18 +1203,20 @@ int OnCalculate(const int rates_total,
    if(rates_total > 1 && time[0] != last_zz_time)
    {
       last_zz_time = time[0];
-      // atualiza somente a barra 1 (fechada)
-      if(rates_total > 1)
+      // recalcula todo o lookback na nova barra (barra a barra)
+      int maxfill = rates_total - 1;
+      if(ZZLookback > 0 && maxfill > ZZLookback) maxfill = ZZLookback;
+      for(int i=maxfill; i>=1; i--)
       {
          double ov=0.0, phv=0.0;
          double ov2=0.0, phv2=0.0;
-         bool ok1b = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, 1, gAtrHandle, ov, phv);
-         bool ok2b = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, 1, gAtrHandle2, ov2, phv2);
-         double basep = close[1];
+         bool okbf1 = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, i, gAtrHandle, ov, phv);
+         bool okbf2 = ComputePhaseAtShift(rates_total, open, high, low, close, tick_volume, volume, i, gAtrHandle2, ov2, phv2);
+         double basep = close[i];
          double scale = (basep != 0.0 ? (OutputScale / basep) : OutputScale);
-         gOut[1] = (ok1b ? ov * scale : 0.0);
-         gOut2[1] = (ok2b ? ov2 * scale : 0.0);
-         gPhaseOut[1] = (ok1b ? phv : gLastPhase);
+         gOut[i] = (okbf1 ? ov * scale : 0.0);
+         gOut2[i] = (okbf2 ? ov2 * scale : 0.0);
+         gPhaseOut[i] = (okbf1 ? phv : gLastPhase);
       }
       need_zz = true;
    }
