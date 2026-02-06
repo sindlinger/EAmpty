@@ -138,11 +138,11 @@ input int          ZZLongAvgCount   = 20;   // swings para média longa
 input int          ZZMidAvgCount    = 10;   // swings para média média
 input bool         ShowZigZagStats  = true;
 input int          ZZTextXOffset    = 110;
-input int          ZZTextYOffset    = 20;
+input int          ZZTextYOffset    = 10;
 
 input bool         ShowPriceStats   = true;
 input int          PriceStatsXOffset = 20;
-input int          PriceStatsYOffset = 20;
+input int          PriceStatsYOffset = 10;
 input int          PriceStatsBoxWidth = 120;
 input int          PriceStatsBoxHeight = 60;
 
@@ -878,7 +878,7 @@ void UpdatePhaseClock(const double phase)
 // ---------------- ZigZag helpers ----------------
 void UpdateZZStats(const int pivots, const int &pidx[], const int &pdir[])
 {
-   if(!ShowZigZagStats){ DeleteZZText(); DeletePriceStats(); return; }
+   if(!ShowZigZagStats && !ShowPriceStats){ DeleteZZText(); DeletePriceStats(); return; }
    EnsureSubWin();
 
    int last = pivots - 1;
@@ -970,11 +970,14 @@ int BuildWaveZigZag(const int rates_total, const double &wave[], int &pivots, in
    ArrayResize(pidx, 0);
    ArrayResize(pdir, 0);
 
+   int minbar = 1; // ignora barra 0 para evitar pivot "colado" e permitir contagem barra a barra
+   if(maxbars <= minbar) return 0;
+
    int last_idx = maxbars;
    double last_val = wave[last_idx];
    int last_dir = 0;
 
-   for(int i=maxbars-1; i>=0; i--)
+   for(int i=maxbars-1; i>=minbar; i--)
    {
       double v = wave[i];
       if(v == EMPTY_VALUE) continue;
@@ -1025,6 +1028,7 @@ int BuildWaveZigZag(const int rates_total, const double &wave[], int &pivots, in
    int n = ArraySize(pidx);
    ArrayResize(pidx, n+1);
    ArrayResize(pdir, n+1);
+   if(last_idx < minbar) last_idx = minbar;
    pidx[n] = last_idx;
    pdir[n] = (last_dir >= 0 ? 1 : -1);
 
